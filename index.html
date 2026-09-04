@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Statistik Sentimen Masyarakat</title>
+    <!-- Tailwind CSS untuk Styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js untuk Grafik -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- FontAwesome untuk Ikon -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3b82f6',
+                        success: '#10b981',
+                        danger: '#ef4444',
+                        warning: '#f59e0b',
+                        dark: '#1e293b',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        .toast {
+            transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out;
+            transform: translateY(-20px);
+            opacity: 0;
+            pointer-events: none;
+        }
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
+            pointer-events: all;
+        }
+    </style>
+</head>
+<body class="text-slate-800 h-screen flex overflow-hidden">
+
+    <!-- Sidebar -->
+    <aside class="w-72 bg-dark text-white flex flex-col h-full shadow-xl z-20 hidden md:flex shrink-0">
+        <div class="p-6 border-b border-slate-700 flex items-center gap-3">
+            <div class="w-10 h-10 bg-primary rounded-lg flex items-center justify-center text-xl font-bold shadow-lg shadow-blue-500/30">
+                <i class="fas fa-chart-pie"></i>
+            </div>
+            <div>
+                <h1 class="text-lg font-bold leading-tight">Sentimen<br><span class="text-blue-400">Masyarakat</span></h1>
+            </div>
+        </div>
+        
+        <div class="p-6 flex-1 overflow-y-auto">
+            <h2 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">Konfigurasi Apify</h2>
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-slate-300 mb-1">API Token</label>
+                    <input type="password" id="apiToken" class="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors" value="apify_api_z77AJLRKB9HzoExb68tIezCddmyz881TcVGZ">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-300 mb-1">User ID</label>
+                    <input type="text" id="userId" class="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-400 cursor-not-allowed" value="DbrSk5BC4jMs9nhzE" readonly>
+                    <p class="text-[10px] text-slate-400 mt-1">*Digunakan sebagai referensi akun</p>
+                </div>
+                
+                <div class="pt-2 border-t border-slate-700">
+                    <label class="block text-sm font-medium text-slate-300 mb-1">Pilih Dataset (Hasil Scraping)</label>
+                    <div class="flex gap-2">
+                        <select id="datasetSelect" class="flex-1 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 appearance-none">
+                            <option value="">-- Muat Dataset --</option>
+                        </select>
+                        <button onclick="loadDatasets()" class="bg-slate-700 hover:bg-slate-600 text-white px-3 py-2 rounded-lg transition-colors" title="Refresh Dataset">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <button onclick="fetchDatasetData()" id="fetchDataBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg px-4 py-2.5 mt-4 transition-colors flex items-center justify-center gap-2">
+                    <i class="fas fa-cloud-download-alt"></i> Ambil & Analisis Data
+                </button>
+            </div>
+            
+            <div class="mt-8 bg-slate-800/50 border border-slate-700 p-4 rounded-lg">
+                <h3 class="text-sm font-semibold mb-2 text-blue-400"><i class="fas fa-info-circle mr-1"></i> Cara Kerja</h3>
+                <p class="text-xs text-slate-400 leading-relaxed">
+                    Aplikasi ini mengambil data teks (seperti komentar/tweet) dari Apify. Jika data tidak memiliki label sentimen, sistem NLP lokal (kamus kata bahasa Indonesia) akan otomatis memprosesnya.
+                </p>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col h-full overflow-hidden relative">
+        <!-- Mobile Header -->
+        <header class="md:hidden bg-white border-b p-4 flex items-center justify-between z-10">
+            <div class="flex items-center gap-2">
+                <i class="fas fa-chart-pie text-primary text-xl"></i>
+                <h1 class="font-bold text-lg">Sentimen Dasbor</h1>
+            </div>
+            <button onclick="document.getElementById('mobileMenu').classList.toggle('hidden')" class="text-slate-600">
+                <i class="fas fa-bars text-xl"></i>
+            </button>
+        </header>
+        
+        <!-- Mobile Menu (Hidden by default) -->
+        <div id="mobileMenu" class="hidden md:hidden absolute top-16 left-0 right-0 bg-dark text-white p-4 z-20 shadow-lg">
+             <p class="text-sm mb-2">Harap gunakan versi desktop untuk konfigurasi API yang optimal.</p>
+        </div>
+
+        <div class="flex-1 overflow-y-auto p-4 md:p-8 w-full max-w-7xl mx-auto">
+            
+            <!-- Notification Toast -->
+            <div id="toastMessage" class="toast fixed top-4 right-4 z-50 bg-white border-l-4 border-blue-500 shadow-lg rounded-r p-4 max-w-md flex items-start gap-3">
+                <i id="toastIcon" class="fas fa-info-circle text-blue-500 mt-1"></i>
+                <div>
+                    <h4 id="toastTitle" class="font-semibold text-sm">Notifikasi</h4>
+                    <p id="toastDesc" class="text-xs text-slate-500 mt-1">Pesan akan tampil di sini.</p>
+                </div>
+            </div>
+
+            <!-- Header -->
+            <div class="flex flex-col md:flex-row md:items-end justify-between mb-8 gap-4">
+                <div>
+                    <h2 class="text-2xl font-bold text-slate-800">Ringkasan Analisis</h2>
+                    <p class="text-sm text-slate-500 mt-1" id="dataStatus">Menunggu data dari Apify API...</p>
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="loadMockData()" class="text-sm bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-lg transition-colors font-medium shadow-sm">
+                        <i class="fas fa-flask mr-1"></i> Gunakan Data Dummy
+                    </button>
+                </div>
+            </div>
+
+            <!-- Stats Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <!-- Card 1 -->
+                <div class="glass-card p-6 rounded-2xl relative overflow-hidden group">
+                    <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                        <i class="fas fa-database text-6xl text-blue-600"></i>
+                    </div>
+                    <p class="text-sm font-medium text-slate-500 mb-1">Total Data Diproses</p>
+                    <h3 class="text-3xl font-bold text-slate-800" id="statTotal">0</h3>
+                </div>
+                
+                <!-- Card 2 -->
+                <div class="glass-card p-6 rounded-2xl relative overflow-hidden group border-b-4 border-b-success">
+                    <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                        <i class="fas fa-smile text-6xl text-success"></i>
+                    </div>
+                    <p class="text-sm font-medium text-slate-500 mb-1">Sentimen Positif</p>
+                    <div class="flex items-end gap-2">
+                        <h3 class="text-3xl font-bold text-slate-800" id="statPos">0</h3>
+                        <span class="text-sm font-semibold text-success mb-1" id="pctPos">0%</span>
+                    </div>
+                </div>
+
+                <!-- Card 3 -->
+                <div class="glass-card p-6 rounded-2xl relative overflow-hidden group border-b-4 border-b-warning">
+                    <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                        <i class="fas fa-meh text-6xl text-warning"></i>
+                    </div>
+                    <p class="text-sm font-medium text-slate-500 mb-1">Sentimen Netral</p>
+                    <div class="flex items-end gap-2">
+                        <h3 class="text-3xl font-bold text-slate-800" id="statNeu">0</h3>
+                        <span class="text-sm font-semibold text-warning mb-1" id="pctNeu">0%</span>
+                    </div>
+                </div>
+
+                <!-- Card 4 -->
+                <div class="glass-card p-6 rounded-2xl relative overflow-hidden group border-b-4 border-b-danger">
+                    <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                        <i class="fas fa-frown text-6xl text-danger"></i>
+                    </div>
+                    <p class="text-sm font-medium text-slate-500 mb-1">Sentimen Negatif</p>
+                    <div class="flex items-end gap-2">
+                        <h3 class="text-3xl font-bold text-slate-800" id="statNeg">0</h3>
+                        <span class="text-sm font-semibold text-danger mb-1" id="pctNeg">0%</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts Section -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+                <!-- Doughnut Chart -->
+                <div class="glass-card p-6 rounded-2xl col-span-1">
+                    <h3 class="text-lg font-bold text-slate-800 mb-4">Distribusi Sentimen</h3>
+                    <div class="relative h-64 w-full flex justify-center">
+                        <canvas id="sentimentChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Line/Bar Chart for Trend (Mocked Timeline) -->
+                <div class="glass-card p-6 rounded-2xl col-span-1 lg:col-span-2">
+                    <h3 class="text-lg font-bold text-slate-800 mb-4">Kata Kunci Populer / Tren</h3>
+                    <div class="relative h-64 w-full">
+                        <canvas id="keywordChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Data Table -->
+            <div class="glass-card rounded-2xl overflow-hidden mb-8">
+                <div class="p-6 border-b border-slate-100 flex justify-between items-center bg-white">
+                    <h3 class="text-lg font-bold text-slate-800">Detail Data (Terbaru)</h3>
+                    <div class="text-sm text-slate-500" id="tableMeta">Menampilkan 0 baris</div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50 text-slate-500 text-sm uppercase tracking-wider">
+                                <th class="p-4 font-semibold w-16">No</th>
+                                <th class="p-4 font-semibold">Teks / Komentar</th>
+                                <th class="p-4 font-semibold w-32">Skor Sentimen</th>
+                                <th class="p-4 font-semibold w-32">Kategori</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dataTableBody" class="text-sm text-slate-700 divide-y divide-slate-100">
+                            <tr>
+                                <td colspan="4" class="p-8 text-center text-slate-400">
+                                    <i class="fas fa-inbox text-3xl mb-3 block opacity-50"></i>
+                                    Belum ada data ditarik. Silakan pilih dataset dan klik "Ambil & Analisis Data".
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <script>
+        // === GLOBAL VARIABLES & CHART INIT ===
+        let sentimentChartInstance = null;
+        let keywordChartInstance = null;
+        let currentData = [];
+
+        // Inisialisasi Chart Kosong
+        function initCharts() {
+            const ctxSentiment = document.getElementById('sentimentChart').getContext('2d');
+            sentimentChartInstance = new Chart(ctxSentiment, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Positif', 'Netral', 'Negatif'],
+                    datasets: [{
+                        data: [0, 0, 0],
+                        backgroundColor: ['#10b981', '#f59e0b', '#ef4444'],
+                        borderWidth: 0,
+                        hoverOffset: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom', labels: { usePointStyle: true, padding: 20 } }
+                    },
+                    cutout: '70%'
+                }
+            });
+
+            const ctxKeyword = document.getElementById('keywordChart').getContext('2d');
+            keywordChartInstance = new Chart(ctxKeyword, {
+                type: 'bar',
+                data: {
+                    labels: ['Tunggu data...'],
+                    datasets: [{
+                        label: 'Frekuensi Kemunculan',
+                        data: [0],
+                        backgroundColor: '#3b82f6',
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { beginAtZero: true, grid: { borderDash: [2, 4], color: '#f1f5f9' } },
+                        x: { grid: { display: false } }
+                    }
+                }
+            });
+        }
+
+        // Custom UI Notification function (menggantikan alert)
+        function showNotification(title, message, type = 'info') {
+            const toast = document.getElementById('toastMessage');
+            const toastTitle = document.getElementById('toastTitle');
+            const toastDesc = document.getElementById('toastDesc');
+            const toastIcon = document.getElementById('toastIcon');
+
+            toastTitle.innerText = title;
+            toastDesc.innerText = message;
+
+            // Reset classes
+            toast.className = 'toast fixed top-4 right-4 z-50 bg-white border-l-4 shadow-xl rounded-r p-4 max-w-md flex items-start gap-3';
+            toastIcon.className = 'fas mt-1 text-lg';
+
+            if (type === 'error') {
+                toast.classList.add('border-danger');
+                toastIcon.classList.add('fa-exclamation-circle', 'text-danger');
+            } else if (type === 'success') {
+                toast.classList.add('border-success');
+                toastIcon.classList.add('fa-check-circle', 'text-success');
+            } else {
+                toast.classList.add('border-primary');
+                toastIcon.classList.add('fa-info-circle', 'text-primary');
+            }
+
+            toast.classList.add('show');
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 4000);
+        }
+
+        // === API INTEGRATION ===
+
+        // 1. Fetch Daftar Dataset
+        async function loadDatasets() {
+            const token = document.getElementById('apiToken').value;
+            if (!token) {
+                showNotification('Error', 'Token API tidak boleh kosong', 'error');
+                return;
+            }
+
+            const select = document.getElementById('datasetSelect');
+            select.innerHTML = '<option value="">Sedang memuat...</option>';
+            select.disabled = true;
+
+            try {
+                // Endpoint Apify untuk mengambil daftar dataset milik user berdasarkan token
+                const response = await fetch(`https://api.apify.com/v2/datasets?token=${token}&desc=true&limit=15`);
+                
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                
+                const data = await response.json();
+                const datasets = data.data.items;
+                
+                if (datasets.length === 0) {
+                    select.innerHTML = '<option value="">Tidak ada dataset ditemukan</option>';
+                    showNotification('Info', 'Token valid, namun akun Anda belum memiliki dataset scraping.', 'warning');
+                } else {
+                    select.innerHTML = '<option value="">-- Pilih Dataset --</option>';
+                    datasets.forEach(ds => {
+                        // ds.id adalah Dataset ID. Tampilkan juga nama/tanggal jika ada
+                        const dateStr = new Date(ds.createdAt).toLocaleDateString('id-ID');
+                        const name = ds.name ? ds.name : `Dataset ${ds.id.substring(0,6)}`;
+                        const opt = document.createElement('option');
+                        opt.value = ds.id;
+                        opt.text = `${name} (${ds.itemCount} items) - ${dateStr}`;
+                        select.appendChild(opt);
+                    });
+                    
+                    // Auto select the first dataset if available
+                    if(datasets.length > 0) {
+                        select.value = datasets[0].id;
+                        showNotification('Sukses', `Berhasil memuat ${datasets.length} dataset.`, 'success');
+                    }
+                }
+            } catch (error) {
+                console.error("Fetch Datasets Error: ", error);
+                select.innerHTML = '<option value="">Gagal memuat API</option>';
+                showNotification('Koneksi Gagal', 'Gagal memuat dataset dari Apify. Cek kembali token Anda.', 'error');
+            } finally {
+                select.disabled = false;
+            }
+        }
+
+        // 2. Fetch Data dari Dataset Terpilih
+        async function fetchDatasetData() {
+            const token = document.getElementById('apiToken').value;
+            const datasetId = document.getElementById('datasetSelect').value;
+            
+            if (!datasetId) {
+                showNotification('Perhatian', 'Silakan pilih dataset terlebih dahulu dari daftar, atau gunakan Data Dummy jika belum ada.', 'warning');
+                return;
+            }
+
+            const btn = document.getElementById('fetchDataBtn');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Memproses...';
+            btn.disabled = true;
+
+            try {
+                // Fetch isi item dataset. Dibatasi 500 baris agar performa peramban tetap stabil
+                const response = await fetch(`https://api.apify.com/v2/datasets/${datasetId}/items?token=${token}&limit=500`);
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                
+                const items = await response.json();
+                
+                if (items.length === 0) {
+                    showNotification('Info', 'Dataset ini kosong.', 'warning');
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                    return;
+                }
+                
+                processApifyData(items);
+                showNotification('Berhasil', `Menarik dan menganalisis ${items.length} data.`, 'success');
+
+            } catch (error) {
+                console.error("Fetch Data Error: ", error);
+                showNotification('Gagal', 'Gagal menarik data dari Dataset.', 'error');
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        }
+
+        // === SENTIMENT NLP LOGIC (INDONESIAN) ===
+        // Algoritma leksikon sederhana jika data Apify tidak memiliki field sentimen
+        const posKeywords = ['bagus', 'keren', 'mantap', 'baik', 'suka', 'puas', 'cepat', 'ramah', 'luar biasa', 'terbaik', 'indah', 'membantu', 'rekomendasi', 'aman', 'enak'];
+        const negKeywords = ['jelek', 'buruk', 'kecewa', 'lambat', 'mahal', 'kasar', 'rusak', 'penipuan', 'kurang', 'marah', 'benci', 'parah', 'payah', 'sampah', 'hancur'];
+
+        function analyzeSentiment(text) {
+            if (!text || typeof text !== 'string') return { score: 0, label: 'Netral' };
+            
+            let score = 0;
+            const lowerText = text.toLowerCase();
+            
+            posKeywords.forEach(word => {
+                const regex = new RegExp(`\\b${word}\\b`, 'gi');
+                const matches = lowerText.match(regex);
+                if (matches) score += matches.length;
+            });
+
+            negKeywords.forEach(word => {
+                const regex = new RegExp(`\\b${word}\\b`, 'gi');
+                const matches = lowerText.match(regex);
+                if (matches) score -= matches.length;
+            });
+
+            let label = 'Netral';
+            if (score > 0) label = 'Positif';
+            else if (score < 0) label = 'Negatif';
+
+            return { score, label };
+        }
+
+        function extractTextFromObject(obj) {
+            // Coba temukan field yang paling mungkin berisi teks/komentar
+            if (obj.text) return obj.text;
+            if (obj.comment) return obj.comment;
+            if (obj.content) return obj.content;
+            if (obj.tweet) return obj.tweet;
+            if (obj.description) return obj.description;
+            // Fallback, gabungkan nilai string
+            const values = Object.values(obj).filter(val => typeof val === 'string' && val.length > 15);
+            return values.length > 0 ? values[0] : "";
+        }
+
+        // === DATA PROCESSING ===
+        function processApifyData(rawItems) {
+            currentData = rawItems.map(item => {
+                let text = extractTextFromObject(item);
+                let sentimentObj = { score: 0, label: 'Netral' };
+                
+                // Cek apakah dataset dari Apify sudah bawa field sentiment bawaan
+                if (item.sentiment && typeof item.sentiment === 'string') {
+                    const l = item.sentiment.toLowerCase();
+                    if (l.includes('pos')) sentimentObj = { score: 1, label: 'Positif' };
+                    else if (l.includes('neg')) sentimentObj = { score: -1, label: 'Negatif' };
+                } else if (text) {
+                    // Jika belum ada, gunakan Analisis NLP Lokal
+                    sentimentObj = analyzeSentiment(text);
+                } else {
+                    text = "[Tidak ada teks yang dapat diekstrak dari baris ini]";
+                }
+
+                return {
+                    original: item,
+                    text: text,
+                    score: sentimentObj.score,
+                    sentiment: sentimentObj.label
+                };
+            });
+
+            updateDashboardUI();
+        }
+
+        function updateDashboardUI() {
+            const total = currentData.length;
+            let pos = 0, neg = 0, neu = 0;
+            
+            // Ekstraksi kata untuk chart kata kunci
+            const wordCounts = {};
+
+            currentData.forEach(item => {
+                if (item.sentiment === 'Positif') pos++;
+                else if (item.sentiment === 'Negatif') neg++;
+                else neu++;
+
+                // Word count untuk bar chart (kata-kata di atas 4 huruf)
+                if (item.text && typeof item.text === 'string') {
+                    const words = item.text.toLowerCase().replace(/[^\w\s]/gi, '').split(/\s+/);
+                    words.forEach(w => {
+                        if (w.length > 4 && !['untuk','dengan','dalam','tidak','yang','pada','dari'].includes(w)) {
+                            wordCounts[w] = (wordCounts[w] || 0) + 1;
+                        }
+                    });
+                }
+            });
+
+            // Update Cards
+            document.getElementById('statTotal').innerText = total;
+            document.getElementById('statPos').innerText = pos;
+            document.getElementById('statNeu').innerText = neu;
+            document.getElementById('statNeg').innerText = neg;
+            
+            document.getElementById('pctPos').innerText = total > 0 ? Math.round((pos/total)*100) + '%' : '0%';
+            document.getElementById('pctNeu').innerText = total > 0 ? Math.round((neu/total)*100) + '%' : '0%';
+            document.getElementById('pctNeg').innerText = total > 0 ? Math.round((neg/total)*100) + '%' : '0%';
+
+            // Update Doughnut Chart
+            sentimentChartInstance.data.datasets[0].data = [pos, neu, neg];
+            sentimentChartInstance.update();
+
+            // Update Keyword Chart (Top 7 Keywords)
+            const sortedWords = Object.keys(wordCounts).sort((a,b) => wordCounts[b] - wordCounts[a]).slice(0, 7);
+            const wordFreq = sortedWords.map(w => wordCounts[w]);
+            
+            keywordChartInstance.data.labels = sortedWords.length > 0 ? sortedWords : ['Tidak ada data'];
+            keywordChartInstance.data.datasets[0].data = wordFreq.length > 0 ? wordFreq : [0];
+            keywordChartInstance.update();
+
+            // Update Table
+            const tbody = document.getElementById('dataTableBody');
+            tbody.innerHTML = '';
+            
+            // Tampilkan max 100 baris terbaru di tabel
+            const displayData = currentData.slice(0, 100);
+            document.getElementById('tableMeta').innerText = `Menampilkan ${displayData.length} dari ${total} data`;
+
+            displayData.forEach((item, index) => {
+                const tr = document.createElement('tr');
+                
+                let badgeClass = "bg-slate-100 text-slate-700";
+                if(item.sentiment === 'Positif') badgeClass = "bg-green-100 text-green-700 border-green-200";
+                if(item.sentiment === 'Negatif') badgeClass = "bg-red-100 text-red-700 border-red-200";
+                if(item.sentiment === 'Netral') badgeClass = "bg-yellow-100 text-yellow-700 border-yellow-200";
+
+                tr.innerHTML = `
+                    <td class="p-4">${index + 1}</td>
+                    <td class="p-4">
+                        <p class="truncate max-w-sm md:max-w-xl font-medium" title="${item.text}">
+                            ${item.text.length > 80 ? item.text.substring(0, 80) + '...' : item.text}
+                        </p>
+                    </td>
+                    <td class="p-4 font-mono text-sm">${item.score > 0 ? '+'+item.score : item.score}</td>
+                    <td class="p-4">
+                        <span class="px-3 py-1 rounded-full text-xs font-semibold border ${badgeClass}">
+                            ${item.sentiment}
+                        </span>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            document.getElementById('dataStatus').innerHTML = `<span class="text-green-500"><i class="fas fa-check-circle"></i> Data berhasil disinkronisasi & dianalisis.</span>`;
+        }
+
+        // === MOCK DATA GENERATOR ===
+        function loadMockData() {
+            const dummyTexts = [
+                "Aplikasi ini sangat bagus dan cepat! Mantap.",
+                "Kecewa sekali, pelayanannya sangat lambat dan jelek.",
+                "Biasa saja, tidak ada yang istimewa dari produk ini.",
+                "Luar biasa keren desainnya, saya suka.",
+                "Harga terlalu mahal untuk kualitas yang rusak dan parah.",
+                "Cukup membantu untuk keperluan sehari-hari.",
+                "Rekomendasi banget buat yang lagi cari barang murah tapi awet.",
+                "Barang tidak sesuai pesanan, penipuan!",
+                "Pengiriman cepat dan kurir sangat ramah.",
+                "Awalnya ragu, tapi ternyata memang terbaik layanannya."
+            ];
+
+            const mockItems = [];
+            for (let i = 0; i < 50; i++) {
+                const randomText = dummyTexts[Math.floor(Math.random() * dummyTexts.length)];
+                mockItems.push({ text: randomText });
+            }
+
+            processApifyData(mockItems);
+            showNotification('Mode Demo Aktif', 'Memuat data simulasi (Dummy Data) untuk demonstrasi visualisasi.', 'info');
+            
+            // Set select ke kosong agar tidak bingung
+            document.getElementById('datasetSelect').innerHTML = '<option value="">-- Mode Dummy Data --</option>';
+        }
+
+        // On Load
+        window.onload = () => {
+            initCharts();
+            // Coba untuk fetch API list secara otomatis karena token sudah di embed
+            setTimeout(loadDatasets, 500);
+        };
+    </script>
+</body>
+</html>
